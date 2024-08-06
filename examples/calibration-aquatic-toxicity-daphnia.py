@@ -1,19 +1,22 @@
-
+# Daphnia Manga
 import numpy as np
 import time
 from scipy.special import erf, erfinv
 from matplotlib import pyplot as plt
 from sklearn.datasets import make_regression 
 from sklearn.linear_model import BayesianRidge
+import pdb;
+# pdb.set_trace()
 from forecasters.recalibration import (
   EWARecalibratedRegressionForecaster, MeanRecalibratedRegressionForecaster
 )
+
 from forecasters.calibration import quantile_calib_loss, pit_calib_loss
-import pdb;
+
 # pdb.set_trace()
 
 from numpy import genfromtxt
-my_data = genfromtxt('/Users/shachideshpande/Downloads/online-quantile-calibration-master/examples/Facebook_comment_var1.csv', max_rows=10000, delimiter=',', dtype=None)
+my_data = genfromtxt('/Users/shachideshpande/Downloads/online-quantile-calibration-master/examples/qsar_aquatic_toxicity.csv', delimiter=';', dtype=None)
 my_data = np.array(my_data.tolist())
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
@@ -22,17 +25,17 @@ my_data = np.array(my_data.tolist())
 
 
 # create a dataset
-T = 1000 # number of time steps of online learning
-n_batch = 10 # take ten data points at a time
+T = 100 # number of time steps of online learning
+n_batch = 5 # take ten data points at a time
 # X, y = make_regression(
 #   n_samples=(T+1)*n_batch, n_features=100, n_informative=10, noise=0.0
 # )
 
-X = my_data[:, :53]
-y = my_data[:, 53]
+X = my_data[:, :8]
+y = my_data[:, 8]
 N = 20 # recalibrator discretizes probs into N intervals; best perf is 1/N
-# cal_eval_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0,7, 0.8, 0.9] # measure calibration at these
-cal_eval_levels = [0.2, 0.4, 0.5, 0.6, 0.8]
+cal_eval_levels = [0.2, 0.4, 0.5, 0.6, 0.8] # measure calibration at these
+
 # define the model
 ridge = BayesianRidge()
 
@@ -61,11 +64,9 @@ F_losses = np.zeros([T,n_batch])
 P = np.zeros([T,n_batch])
 P_exp = np.zeros([T,n_batch])
 P_raw = np.zeros([T,n_batch])
-
+start = time.time()
 final_results_randomized, final_results_nonrandom, final_results_kde, final_results_raw, times = [], [], [], [], []
-
 for reps in range(10):
-  start = time.time()
   for t in range(1,T):
     print('Time: %02d/%02d' % (t, T))
 
@@ -80,7 +81,7 @@ for reps in range(10):
 
     # compute probabilities
     P_raw[t,:] = 0.5*(1 + erf((y_t-mu_raw)/(sigma_raw*np.sqrt(2)))) # uncalibr
-    P[t,:] = [R.predict(pi) for pi in P_raw[t]]
+    # P[t,:] = [R.predict(pi) for pi in P_raw[t]]
     P_exp[t,:] = [R.expected_prediction(pi) for pi in P_raw[t]]
 
     # # compute crps loss # TODO:
@@ -101,12 +102,12 @@ for reps in range(10):
     ridge.fit(X_tt, y_tt)
 
   # average everything
-
-  # plot the expected loss:
-  # plot the expected loss:
   end = time.time()
+
   print((end-start, str(reps)+"total time"))
   times.append(end-start)
+  # exit(1)
+  # plot the expected loss:
   print('Plotting CRPS loss over time')
   plt.subplot(311)
   cum_losses = np.array([1/float(t+1) for t in range(T)]) * np.cumsum(F_losses.mean(axis=1))
@@ -125,18 +126,16 @@ for reps in range(10):
   ])
   plt.plot(range(1,T), cum_raw_loss[1:], color='red') # skip first 1 t
   plt.plot(range(1,T), cum_cal_loss[1:], color='blue') # skip first 1 t
-  # plt.ylim(0, 0.05)
+  plt.ylim(0, 0.05)
   plt.xlabel('Time steps')
   plt.ylabel('Cal Error')
   plt.legend(['raw', 'recal (raw)'])
-
-  print('Plotting random calibration loss over time')
-
   final_results_raw.append(cum_raw_loss)
   final_results_nonrandom.append(cum_cal_loss)
   print((str(reps)+"Raw", cum_raw_loss))
   print((str(reps)+"Non-randomized",cum_cal_loss))
-
+  # pdb.set_trace()
+  print('Plotting random calibration loss over time')
   plt.subplot(313)
   cum_raw_loss = np.array([
     pit_calib_loss(P_raw[:t].flatten(), cal_eval_levels) for t in range(T)
@@ -146,16 +145,16 @@ for reps in range(10):
   ])
   plt.plot(range(1,T), cum_raw_loss[1:], color='red') # skip first 1 t
   plt.plot(range(1,T), cum_cal_loss[1:], color='blue') # skip first 1 t
-  # plt.ylim(0, 0.05)
+  plt.ylim(0, 0.05)
   plt.xlabel('Time steps')
   plt.ylabel('Cal Error')
   plt.legend(['raw', 'recal (random)'])
   final_results_randomized.append(cum_cal_loss)
+  print((str(reps)+"Randomized",cum_cal_loss))
+
   # save the figures
   # plt.show()
-  plt.savefig(str(reps)+'recalibration-facebook-comments-total-gaussian_ewa_recalib.png')
-
-
+  plt.savefig(str(reps)+'recalibration-aquatic-toxicity-total-gaussian_ewa_recalib.png')
 pdb.set_trace()
 
 print(("Mean randomized",np.array(final_results_randomized).mean(0)))
@@ -167,3 +166,5 @@ print(("Std nonrandomized",np.array(final_results_nonrandom).std(0)))
 print(("Mean raw",np.array(final_results_raw).mean(0)))
 print(("Std raw",np.array(final_results_raw).std(0)))
 print(("Times", np.array(times), np.array(times).mean(), np.array(times).std()))
+
+
